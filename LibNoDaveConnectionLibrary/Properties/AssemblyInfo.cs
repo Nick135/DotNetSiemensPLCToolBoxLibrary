@@ -8,9 +8,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("DotNetSiemensPLCToolBoxLibrary")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("TOSHIBA")]
+[assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("DotNetSiemensPLCToolBoxLibrary")]
-[assembly: AssemblyCopyright("Copyright © TOSHIBA 2010")]
+[assembly: AssemblyCopyright("Copyright ©")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

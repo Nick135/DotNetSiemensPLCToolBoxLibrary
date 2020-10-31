@@ -2812,7 +2812,6 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                         }
 
                         bool symbolicTag = false;
-
                         var nckT = libNoDaveValue as PLCNckTag;
 
                         if (!string.IsNullOrEmpty(libNoDaveValue.SymbolicAccessKey))
@@ -2820,6 +2819,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                             askSize = 4 + libNoDaveValue.SymbolicAccessKey.Length;
                             symbolicTag = true;
                         }
+
                         //Save the Byte Address in anthoer Variable, because if we split the Read Request, we need not the real Start Address
                         akByteAddress = libNoDaveValue.ByteAddress;
 
@@ -2839,12 +2839,14 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                         var currentAskSize = askSize;       //
                         if (lastRequestWasAUnevenRequest)
                             currentAskSize++;
+
+                        #region Split...
                         //When there are too much bytes in the answer pdu, or you read more then the possible tags...
                         //But don't split if the bit is set (but ignore it if the tag is bigger then the pdu size!)
                         if ((readSizeWithHeader + gesReadSize > maxReadSize || gesAskSize + currentAskSize > maxReadSize))
                         {
                             //If there is space for a tag left.... Then look how much Bytes we can put into this PDU
-                            if (nckT == null && !symbolicTag && gesAskSize + currentAskSize <= maxReadSize && (!libNoDaveValue.DontSplitValue || readSize > maxReadSize))
+                            if (nckT == null && !symbolicTag && gesAskSize + currentAskSize <= maxReadSize && (!libNoDaveValue.DontSplitValue || readSize > (maxReadSize - HeaderTagSize)))
                             {
                                 #region Without NCK
                                 int restBytes = maxReadSize - gesReadSize - HeaderTagSize;
@@ -2872,7 +2874,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                                         myPDU.addVarToReadRequest(Convert.ToInt32(libNoDaveValue.TagDataSource), libNoDaveValue.DataBlockNumber, akByteAddress, restBytes);
                                     }
 
-                                    readSize = readSize - restBytes;
+                                    readSize -= restBytes;
 
                                     //Tag was splitted to more than one read request
                                     if (readSize > 0)
@@ -2908,7 +2910,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                             else if (res != 0)
                                 throw new PLCException(res);
 
-                            //Save the Read Data to a User Byte Array (Because we use this in the libnodavevalue class!)                    
+                            #region Save the Read Data to a User Byte Array (Because we use this in the libnodavevalue class!)
                             for (akVar = 0; akVar < anzVar; akVar++)
                             {
                                 byte[] myBuff = new byte[gesReadSize];
@@ -2956,6 +2958,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                                     //}
                                 }
                             }
+                            #endregion
 
                             //rs = null;
                             //myPDU = null;
@@ -2970,11 +2973,12 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                             tagWasSplitted.Clear();
                             usedShortRequest.Clear();
                             //I need to do the whole splitting in anothe way, so that the goto disapears! But for the moment ir works!
-                            goto tryAgain;
+                            goto tryAgain; //Read next part of splitted plc address
                             //It tries again the Size test, this is necessary, when the Tag is bigger then one PDU
                         }
+                        #endregion
 
-                        gesReadSize = gesReadSize + readSizeWithHeader;
+                        gesReadSize += readSizeWithHeader;
                         gesAskSize += askSize;
                         readenSizes.Add(readSize);
                         anzVar++;
@@ -3034,7 +3038,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                             throw new PLCException(res);
 
                         //positionInCompleteData = 0;
-                        //Save the Read Data to a User Byte Array (Because we use this in the libnodavevalue class!)
+                        #region Save the Read Data to a User Byte Array (Because we use this in the libnodavevalue class!)
 
                         for (akVar = 0; akVar < anzVar; akVar++)
                         {
@@ -3082,6 +3086,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                                 //}
                             }
                         }
+                        #endregion
                     }
 
                     if (lockObtained)
