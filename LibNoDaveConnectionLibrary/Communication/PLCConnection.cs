@@ -48,6 +48,7 @@ using DotNetSiemensPLCToolBoxLibrary.General;
 using DotNetSiemensPLCToolBoxLibrary.PLCs.S7_xxx.MC7;
 using Microsoft.Win32;
 using ThreadState = System.Threading.ThreadState;
+using System.Net.Sockets;
 
 /*
  * Todo: List Online Partners
@@ -130,6 +131,11 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
             AutoDisconnect = true;
         }
 
+        ~PLCConnection()
+        {
+            Dispose();
+        }
+
 
         private bool _connected;
 
@@ -158,7 +164,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
 
         //LibNoDave used types
         private libnodave.daveOSserialType _fds;
-        private IntPtr? _socketPtr;
+        private TcpClient _tcpClient;
         private libnodave.daveInterface _di = null; //dave Interface
         public IDaveConnection _dc = null;
         private Func<int, string> _errorCodeConverter;
@@ -176,18 +182,17 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
 
         public void socket_Thread()
         {
-            if (Logger != null)
-                Logger("socket thread created");
+            _fds.rfd = IntPtr.Zero;
 
-            if (_socketPtr.HasValue)
+            if (_tcpClient != null)
             {
+                IntPtr? ptr = _tcpClient.Client != null ? (IntPtr?)_tcpClient.Client.Handle : null;
                 if (Logger != null)
-                    Logger("socket thread - close old socket :" + _socketPtr.ToString());
-                libnodave.closeSocket(_socketPtr.Value);
-                _socketPtr = null;
+                    Logger("socket thread - close old socket :" + (ptr.HasValue ? ptr.ToString() : ""));
+                _tcpClient.Close();
+                _tcpClient = null;
             }
 
-            _fds.rfd = new IntPtr(-999);
             string ip = null;
             try
             {
@@ -201,21 +206,22 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             { }
-
-            //TcpClient sock = new TcpClient(ip, _configuration.Port);
-            //_fds.rfd = sock.Client.Handle;
 
             if (Logger != null)
                 Logger("socket thread try to connect");
-            if (ip != null)
-                _fds.rfd = libnodave.openSocket(_configuration.Port, ip);
-            else
-                _fds.rfd = libnodave.openSocket(_configuration.Port, _configuration.CpuIP);
+
+            if (ip == null)
+                ip = _configuration.CpuIP;
+
+            _tcpClient = new TcpClient();
+            _tcpClient.Connect(IPAddress.Parse(ip), _configuration.Port);
+
             if (Logger != null)
-                Logger("socket thread - got socket pointer:" + _socketPtr.ToString());
-            _socketPtr = _fds.rfd;
+                Logger("socket thread - got socket pointer:" + _tcpClient.Client.Handle.ToString());
+
+            _fds.rfd = _tcpClient.Client.Handle;
         }
 
         #region General
@@ -230,15 +236,15 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
 
                 //Debugging for LibNoDave
                 libnodave.daveSetDebug(0x0); //turn off libnodave log messages to console
-                //libnodave.daveSetDebug(0x1ffff);
+            //libnodave.daveSetDebug(0x1ffff);
 
                 //_configuration.ReloadConfiguration();
 
                 //if (hwnd == 0 && _configuration.ConnectionType == 50)
-                //    throw new Exception("Error: You can only use the S7Online Connection when you specify the HWND Parameter on the Connect Function");
+            //    throw new Exception("Error: You can only use the S7Online Connection when you specify the HWND Parameter on the Connect Function");
 
                 //This Jump mark is used when the Netlink Reset is activated!
-                NLAgain:
+            NLAgain:
 
                 #region Setup Port/Adapter
                 //LibNodave Verbindung aufbauen
@@ -325,7 +331,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
 
                     //if the socket handle still has its default value after connection
                     //this means it was an IP connection type, and it did not succed
-                    if (_fds.rfd.ToInt32() == -999)
+                    if (_fds.rfd == IntPtr.Zero)
                     {
                         _NeedDispose = false;
                         throw new Exception("Error: Timeout Connecting the IP (" + _configuration.CpuIP + ":" +
@@ -379,7 +385,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                 {
                     IPConnection = false;
                 }
-       
+
                 //Get S7OnlineType - To detect if is a IPConnection
 #endif
                 #endregion
@@ -396,7 +402,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                         _configuration.RoutingSubnet1, _configuration.RoutingSubnet2,
                         _configuration.RoutingDestinationRack, _configuration.RoutingDestinationSlot,
                         _configuration.RoutingDestination, connectiontypeNumber,
-                        routingConnectiontypeNumber);
+                        routingConnectiontypeNumber,
                         _configuration.MaxPDUlength);
                 }
                 else
@@ -428,7 +434,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                 if (Logger != null)
                     Logger("PLC Connection created");
 
-                PlcConnected?.Invoke(this);
+                if (PlcConnected != null) PlcConnected(this);
                 #endregion
             }
         }
@@ -457,7 +463,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
         public void Disconnect()
         {
             Dispose();
-            PlcDisconnected?.Invoke(this);
+            if (PlcDisconnected != null) PlcDisconnected(this);
         }
 
         private void autoDisconnect()
@@ -835,8 +841,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                                             //Ausgewählte Register für die zeile in die Abfrage eintragen
                                             byte askRegisterByte = GetByteForSelectedRegisters(askRegister,
                                                 DiagDataTeletype);
-                                            LinesSelectedRegisters.AddRange(new byte[]
-                                            {bt[1], bt[0], 0x00, askRegisterByte});
+                                            LinesSelectedRegisters.AddRange(new byte[] { bt[1], bt[0], 0x00, askRegisterByte });
                                             //askSize += 4;
                                         }
                                         else
@@ -916,8 +921,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                     //PDU Data
                     byte[] data;
 
-                    para = new byte[]
-                    {0x00, 0x01, 0x12, 0x08, 0x12, 0x41, DiagDataTeletype, 0x00, 0x00, 0x00, 0x00, 0x00};
+                    para = new byte[] { 0x00, 0x01, 0x12, 0x08, 0x12, 0x41, DiagDataTeletype, 0x00, 0x00, 0x00, 0x00, 0x00 };
                     byte[] tmp1;
                     if (DiagDataTeletype == 0x13)
                         tmp1 = new byte[]
@@ -2162,8 +2166,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                     controlBytes.AddRange(akAsk);
 
                     //Add Control Values ....
-                    controlValues.AddRange(new byte[]
-                        {0x00, 0x09, (byte) (plcTag.ReadByteSize / 0x100), (byte) (plcTag.ReadByteSize % 0x100)});
+                    controlValues.AddRange(new byte[] { 0x00, 0x09, (byte)(plcTag.ReadByteSize / 0x100), (byte)(plcTag.ReadByteSize % 0x100) });
                     byte[] ctrl = new byte[plcTag.ReadByteSize];
                     plcTag._putControlValueIntoBuffer(ctrl, 0);
                     controlValues.AddRange(ctrl);
@@ -2232,9 +2235,9 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                             return 0;
                     else
                         if (pt1.DataBlockNumber > pt2.DataBlockNumber)
-                        return 1;
-                    else
-                        return -1;
+                            return 1;
+                        else
+                            return -1;
 
                     return 0;
                 }
@@ -2250,9 +2253,9 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                             return 0;
                     else
                         if (pt1.TagDataSource > pt2.TagDataSource)
-                        return 1;
-                    else
-                        return -1;
+                            return 1;
+                        else
+                            return -1;
 
                 }
             }
@@ -3694,7 +3697,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                         var currValSize = currVal._internalGetSize();
 
                         if (gesWriteSize < maxWriteSize && //Maximale Byte Anzahl noch nicht erreicht
-                                                           /*anzWriteVar < maxWriteVar &&*/
+                            /*anzWriteVar < maxWriteVar &&*/
                             ( //maximale Variablenanzahl noch nicht erreicht                        
                                 splitPos != 0 || //Value ist schon gesplitted
                                 !currVal.DontSplitValue || //Value Kann gesplitted Werden
@@ -4437,8 +4440,9 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                         case LibNodaveConnectionTypes.Netlink_lite:
                         case LibNodaveConnectionTypes.Netlink_lite_PPI:
                         case LibNodaveConnectionTypes.Netlink_Pro:
-                            libnodave.closeSocket(_fds.rfd);
-                            _socketPtr = null;
+                            _tcpClient.Close();
+                            _tcpClient = null;
+                            _fds.rfd = IntPtr.Zero;
                             break;
                     }
             }
