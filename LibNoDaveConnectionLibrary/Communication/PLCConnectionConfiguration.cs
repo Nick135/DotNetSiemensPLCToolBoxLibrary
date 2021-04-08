@@ -788,6 +788,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                     retVal = "AS 511";
                     break;
                 case LibNodaveConnectionTypes.Use_Step7_DLL:
+                case LibNodaveConnectionTypes.Use_Step7_DLL_Without_TCP:
                     retVal = "Step7 DLL" + " (" + EntryPoint + ")";
                     break;
                 case LibNodaveConnectionTypes.ISO_over_TCP:
@@ -882,6 +883,8 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
         /// </summary>
         [XmlEnum("50")]
         Use_Step7_DLL = 50,
+        [XmlEnum("51")]
+        Use_Step7_DLL_Without_TCP = 51,
 
         /// <summary>
         /// Connections via the TCP/IP protocoll
