@@ -232,210 +232,218 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
         {
             lock (lockObj)
             {
-                _NeedDispose = true;
-
-                //Debugging for LibNoDave
-                libnodave.daveSetDebug(0x0); //turn off libnodave log messages to console
-            //libnodave.daveSetDebug(0x1ffff);
-
-                //_configuration.ReloadConfiguration();
-
-                //if (hwnd == 0 && _configuration.ConnectionType == 50)
-            //    throw new Exception("Error: You can only use the S7Online Connection when you specify the HWND Parameter on the Connect Function");
-
-                //This Jump mark is used when the Netlink Reset is activated!
-            NLAgain:
-
-                #region Setup Port/Adapter
-                //LibNodave Verbindung aufbauen
-                switch (_configuration.ConnectionType)
+                try
                 {
-                    case LibNodaveConnectionTypes.MPI_über_Serial_Adapter:
-                    case LibNodaveConnectionTypes.MPI_über_Serial_Adapter_Andrews_Version_without_STX:
-                    case LibNodaveConnectionTypes.MPI_über_Serial_Adapter_Step_7_Version:
-                    case LibNodaveConnectionTypes.MPI_über_Serial_Adapter_Adrews_Version_with_STX:
-                    case LibNodaveConnectionTypes.PPI_über_Serial_Adapter:
-                        _errorCodeConverter = libnodave.daveStrerror;
-                        _fds.rfd = libnodave.setPort(_configuration.ComPort, _configuration.ComPortSpeed, (int)_configuration.ComPortParity);
-                        break;
+                    _NeedDispose = true;
 
-                    case LibNodaveConnectionTypes.AS_511:
-                        _errorCodeConverter = libnodave.daveStrerror;
-                        _fds.rfd = libnodave.setPort(_configuration.ComPort, _configuration.ComPortSpeed, (int)_configuration.ComPortParity);
-                        break;
+                    //Debugging for LibNoDave
+                    libnodave.daveSetDebug(0x0); //turn off libnodave log messages to console
+                    //libnodave.daveSetDebug(0x1ffff);
+
+                    //_configuration.ReloadConfiguration();
+
+                    //if (hwnd == 0 && _configuration.ConnectionType == 50)
+                    //    throw new Exception("Error: You can only use the S7Online Connection when you specify the HWND Parameter on the Connect Function");
+
+                    //This Jump mark is used when the Netlink Reset is activated!
+                    NLAgain:
+
+                    #region Setup Port/Adapter
+                    //LibNodave Verbindung aufbauen
+                    switch (_configuration.ConnectionType)
+                    {
+                        case LibNodaveConnectionTypes.MPI_über_Serial_Adapter:
+                        case LibNodaveConnectionTypes.MPI_über_Serial_Adapter_Andrews_Version_without_STX:
+                        case LibNodaveConnectionTypes.MPI_über_Serial_Adapter_Step_7_Version:
+                        case LibNodaveConnectionTypes.MPI_über_Serial_Adapter_Adrews_Version_with_STX:
+                        case LibNodaveConnectionTypes.PPI_über_Serial_Adapter:
+                            _errorCodeConverter = libnodave.daveStrerror;
+                            _fds.rfd = libnodave.setPort(_configuration.ComPort, _configuration.ComPortSpeed, (int)_configuration.ComPortParity);
+                            break;
+
+                        case LibNodaveConnectionTypes.AS_511:
+                            _errorCodeConverter = libnodave.daveStrerror;
+                            _fds.rfd = libnodave.setPort(_configuration.ComPort, _configuration.ComPortSpeed, (int)_configuration.ComPortParity);
+                            break;
 
 #if !IPHONE
-                    case LibNodaveConnectionTypes.Use_Step7_DLL:
-                    case LibNodaveConnectionTypes.Use_Step7_DLL_Without_TCP:
-                        _errorCodeConverter = libnodave.daveStrerror;
-                        _fds.rfd = libnodave.openS7online(_configuration.EntryPoint, 0);
-                        if (_fds.rfd.ToInt32() == -1)
+                        case LibNodaveConnectionTypes.Use_Step7_DLL:
+                        case LibNodaveConnectionTypes.Use_Step7_DLL_Without_TCP:
+                            _errorCodeConverter = libnodave.daveStrerror;
+                            _fds.rfd = libnodave.openS7online(_configuration.EntryPoint, 0);
+                            if (_fds.rfd.ToInt32() == -1)
+                            {
+                                _NeedDispose = false;
+                                throw new Exception("Error: " + libnodave.daveStrS7onlineError());
+                            }
+                            break;
+#endif
+
+                        case LibNodaveConnectionTypes.ISO_over_TCP:
+                        case LibNodaveConnectionTypes.ISO_over_TCP_CP_243:
+                        case LibNodaveConnectionTypes.Netlink_lite:
+                        case LibNodaveConnectionTypes.Netlink_lite_PPI:
+                        case LibNodaveConnectionTypes.Netlink_Pro:
+                            _errorCodeConverter = libnodave.daveStrerror;
+                            socketTimer = new System.Timers.Timer(_configuration.TimeoutIPConnect.TotalMilliseconds);
+                            socketTimer.AutoReset = true;
+                            socketTimer.Elapsed += socketTimer_Elapsed;
+                            socketTimer.Start();
+                            socketThread = new Thread(this.socket_Thread);
+                            socketThread.Start();
+                            try
+                            {
+                                while (socketThread.ThreadState != ThreadState.AbortRequested &&
+                                       socketThread.ThreadState != ThreadState.Aborted &&
+                                       socketThread.ThreadState != ThreadState.Stopped)
+                                {
+                                    Thread.Sleep(50);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                            }
+                            if (socketTimer != null)
+                                socketTimer.Stop();
+                            if (socketThread != null)
+                                socketThread.Abort();
+                            socketTimer = null;
+                            socketThread = null;
+                            break;
+
+                        case LibNodaveConnectionTypes.Fetch_Write_Active:
+                            _fetchWriteConnection = new FetchWriteConnection(this.Configuration);
+                            _fetchWriteConnection.Connect();
+                            Connected = true;
+                            return;
+
+                        //case 9050:
+                        //    _errorCodeConverter = Connection.daveStrerror;
+                        //    _dc = new S7onlineNETdave(_configuration);
+                        //    break;
+                        case LibNodaveConnectionTypes.ISO_over_TCP_Managed:
+                            _errorCodeConverter = Connection.daveStrerror;
+                            _dc = new TcpNETdave(_configuration);
+                            break;
+                    }
+
+                    //if it is an Non manged version, using libnodave. Enums > 9000 are Managed implemntations
+                    if ((int)_configuration.ConnectionType < 9000)
+                    {
+
+                        //if the socket handle still has its default value after connection
+                        //this means it was an IP connection type, and it did not succed
+                        if (_fds.rfd == IntPtr.Zero)
                         {
                             _NeedDispose = false;
-                            throw new Exception("Error: " + libnodave.daveStrS7onlineError());
+                            throw new Exception("Error: Timeout Connecting the IP (" + _configuration.CpuIP + ":" +
+                                                _configuration.Port + ")");
                         }
-                        break;
-#endif
 
-                    case LibNodaveConnectionTypes.ISO_over_TCP:
-                    case LibNodaveConnectionTypes.ISO_over_TCP_CP_243:
-                    case LibNodaveConnectionTypes.Netlink_lite:
-                    case LibNodaveConnectionTypes.Netlink_lite_PPI:
-                    case LibNodaveConnectionTypes.Netlink_Pro:
-                        _errorCodeConverter = libnodave.daveStrerror;
-                        socketTimer = new System.Timers.Timer(_configuration.TimeoutIPConnect.TotalMilliseconds);
-                        socketTimer.AutoReset = true;
-                        socketTimer.Elapsed += socketTimer_Elapsed;
-                        socketTimer.Start();
-                        socketThread = new Thread(this.socket_Thread);
-                        socketThread.Start();
-                        try
+                        //if the read handle is still null or even has an error code, except for Simatic NEt connectoins
+                        if ((_configuration.ConnectionType != LibNodaveConnectionTypes.Use_Step7_DLL && _configuration.ConnectionType != LibNodaveConnectionTypes.Use_Step7_DLL_Without_TCP && _fds.rfd.ToInt32() == 0) || _fds.rfd.ToInt32() < 0)
                         {
-                            while (socketThread.ThreadState != ThreadState.AbortRequested &&
-                                   socketThread.ThreadState != ThreadState.Aborted &&
-                                   socketThread.ThreadState != ThreadState.Stopped)
-                            {
-                                Thread.Sleep(50);
-                            }
+                            _NeedDispose = false;
+                            throw new Exception(
+                                "Error: Could not creating the Physical Interface (Maybe wrong IP, COM-Port not Ready,...)");
                         }
-                        catch (Exception ex)
-                        {
-                        }
-                        if (socketTimer != null)
-                            socketTimer.Stop();
-                        if (socketThread != null)
-                            socketThread.Abort();
-                        socketTimer = null;
-                        socketThread = null;
-                        break;
 
-                    case LibNodaveConnectionTypes.Fetch_Write_Active:
-                        _fetchWriteConnection = new FetchWriteConnection(this.Configuration);
-                        _fetchWriteConnection.Connect();
-                        Connected = true;
-                        return;
-
-                    //case 9050:
-                    //    _errorCodeConverter = Connection.daveStrerror;
-                    //    _dc = new S7onlineNETdave(_configuration);
-                    //    break;
-                    case LibNodaveConnectionTypes.ISO_over_TCP_Managed:
-                        _errorCodeConverter = Connection.daveStrerror;
-                        _dc = new TcpNETdave(_configuration);
-                        break;
-                }
-
-                //if it is an Non manged version, using libnodave. Enums > 9000 are Managed implemntations
-                if ((int)_configuration.ConnectionType < 9000)
-                {
-
-                    //if the socket handle still has its default value after connection
-                    //this means it was an IP connection type, and it did not succed
-                    if (_fds.rfd == IntPtr.Zero)
-                    {
-                        _NeedDispose = false;
-                        throw new Exception("Error: Timeout Connecting the IP (" + _configuration.CpuIP + ":" +
-                                            _configuration.Port + ")");
+                        //The connection was successfull
+                        _fds.wfd = _fds.rfd;
                     }
 
-                    //if the read handle is still null or even has an error code, except for Simatic NEt connectoins
-                    if ((_configuration.ConnectionType != LibNodaveConnectionTypes.Use_Step7_DLL && _configuration.ConnectionType != LibNodaveConnectionTypes.Use_Step7_DLL_Without_TCP && _fds.rfd.ToInt32() == 0) || _fds.rfd.ToInt32() < 0)
+                    if (_configuration.ConnectionName == null)
+                        _configuration.ConnectionName = Guid.NewGuid().ToString();
+
+                    #endregion
+
+                    #region Create the Interface
+                    //Create the Interface
+                    if ((int)_configuration.ConnectionType < 9000) //Enums > 9000 are Managed implemntations
                     {
-                        _NeedDispose = false;
-                        throw new Exception(
-                            "Error: Could not creating the Physical Interface (Maybe wrong IP, COM-Port not Ready,...)");
+                        //Dave Interface Erzeugen
+                        _di = new libnodave.daveInterface(_fds, _configuration.ConnectionName, _configuration.LokalMpi, (int)_configuration.ConnectionType, (int)_configuration.BusSpeed);
+
+                        //Timeout setzen...
+                        _di.setTimeout((int)_configuration.TimeoutMicroseconds); //WARNING! setTimeout needs value in Microseconds
+
+                        //Dave Interface initialisieren
+                        var initret = _di.initAdapter();
+                        if (initret != 0)
+                            throw new PLCException("Error: (Interface) (Code: " + initret.ToString() + ") " + _errorCodeConverter(initret), initret);
                     }
 
-                    //The connection was successfull
-                    _fds.wfd = _fds.rfd;
-                }
+                    //Get S7OnlineType - To detect if is a IPConnection 
+                    bool IPConnection = false;
 
-                if (_configuration.ConnectionName == null)
-                    _configuration.ConnectionName = Guid.NewGuid().ToString();
-
-                #endregion
-
-                #region Create the Interface
-                //Create the Interface
-                if ((int)_configuration.ConnectionType < 9000) //Enums > 9000 are Managed implemntations
-                {
-                    //Dave Interface Erzeugen
-                    _di = new libnodave.daveInterface(_fds, _configuration.ConnectionName, _configuration.LokalMpi, (int)_configuration.ConnectionType, (int)_configuration.BusSpeed);
-
-                    //Timeout setzen...
-                    _di.setTimeout((int)_configuration.TimeoutMicroseconds); //WARNING! setTimeout needs value in Microseconds
-
-                    //Dave Interface initialisieren
-                    var initret = _di.initAdapter();
-                    if (initret != 0)
-                        throw new PLCException("Error: (Interface) (Code: " + initret.ToString() + ") " + _errorCodeConverter(initret), initret);
-                }
-
-                //Get S7OnlineType - To detect if is a IPConnection 
-                bool IPConnection = false;
-
-                var connectiontypeNumber = (int)_configuration.PLCConnectionType;
-                var routingConnectiontypeNumber = (int)_configuration.RoutingPLCConnectionType;
+                    var connectiontypeNumber = (int)_configuration.PLCConnectionType;
+                    var routingConnectiontypeNumber = (int)_configuration.RoutingPLCConnectionType;
 #if !IPHONE
-                if (_configuration.ConnectionType == LibNodaveConnectionTypes.Use_Step7_DLL)
-                {
-                    IPConnection = true;
-                }
-                else if (_configuration.ConnectionType == LibNodaveConnectionTypes.Use_Step7_DLL_Without_TCP)
-                {
-                    IPConnection = false;
-                }
+                    if (_configuration.ConnectionType == LibNodaveConnectionTypes.Use_Step7_DLL)
+                    {
+                        IPConnection = true;
+                    }
+                    else if (_configuration.ConnectionType == LibNodaveConnectionTypes.Use_Step7_DLL_Without_TCP)
+                    {
+                        IPConnection = false;
+                    }
 
-                //Get S7OnlineType - To detect if is a IPConnection
+                    //Get S7OnlineType - To detect if is a IPConnection
 #endif
-                #endregion
+                    #endregion
 
-                #region Create Connection
-                if (_configuration.ConnectionType == LibNodaveConnectionTypes.AS_511)
-                {
-                    _dc = new libnodave.daveConnection(_di, _configuration.CpuMpi, 0, 0);
+                    #region Create Connection
+                    if (_configuration.ConnectionType == LibNodaveConnectionTypes.AS_511)
+                    {
+                        _dc = new libnodave.daveConnection(_di, _configuration.CpuMpi, 0, 0);
+                    }
+                    else if ((int)_configuration.ConnectionType < 9000) //Enums > 9000 are Managed implemntations
+                    {
+                        _dc = new libnodave.daveConnection(_di, _configuration.CpuMpi, _configuration.CpuIP, IPConnection,
+                            _configuration.CpuRack, _configuration.CpuSlot, _configuration.Routing,
+                            _configuration.RoutingSubnet1, _configuration.RoutingSubnet2,
+                            _configuration.RoutingDestinationRack, _configuration.RoutingDestinationSlot,
+                            _configuration.RoutingDestination, connectiontypeNumber,
+                            routingConnectiontypeNumber,
+                            _configuration.MaxPDUlength);
+                    }
+                    else
+                    {
+
+                    }
+                    #endregion
+
+                    #region Connect PLC
+                    if (_configuration.NetLinkReset && !_netlinkReseted && (_configuration.ConnectionType == LibNodaveConnectionTypes.Netlink_lite || _configuration.ConnectionType == LibNodaveConnectionTypes.Netlink_lite_PPI))
+                    {
+                        _dc.resetIBH();
+                        _netlinkReseted = true;
+                        System.Threading.Thread.Sleep(1000);
+                        goto NLAgain;
+                    }
+
+                    var ret = _dc.connectPLC();
+                    if (ret == -1)
+                    {
+                        //_dc = null;
+                        throw new Exception("Error: CPU not available! Maybe wrong IP or MPI Address or Rack/Slot or ...");
+                    }
+                    if (ret != 0)
+                        throw new PLCException("Error: (Connection) (Code: " + ret.ToString() + ") " + _errorCodeConverter(ret), ret);
+
+                    Connected = true;
+
+                    if (Logger != null)
+                        Logger("PLC Connection created");
+
+                    if (PlcConnected != null) PlcConnected(this);
+                    #endregion
                 }
-                else if ((int)_configuration.ConnectionType < 9000) //Enums > 9000 are Managed implemntations
+                catch
                 {
-                    _dc = new libnodave.daveConnection(_di, _configuration.CpuMpi, _configuration.CpuIP, IPConnection,
-                        _configuration.CpuRack, _configuration.CpuSlot, _configuration.Routing,
-                        _configuration.RoutingSubnet1, _configuration.RoutingSubnet2,
-                        _configuration.RoutingDestinationRack, _configuration.RoutingDestinationSlot,
-                        _configuration.RoutingDestination, connectiontypeNumber,
-                        routingConnectiontypeNumber,
-                        _configuration.MaxPDUlength);
+                    Dispose();
+                    throw;
                 }
-                else
-                {
-
-                }
-                #endregion
-
-                #region Connect PLC
-                if (_configuration.NetLinkReset && !_netlinkReseted && (_configuration.ConnectionType == LibNodaveConnectionTypes.Netlink_lite || _configuration.ConnectionType == LibNodaveConnectionTypes.Netlink_lite_PPI))
-                {
-                    _dc.resetIBH();
-                    _netlinkReseted = true;
-                    System.Threading.Thread.Sleep(1000);
-                    goto NLAgain;
-                }
-
-                var ret = _dc.connectPLC();
-                if (ret == -1)
-                {
-                    _dc = null;
-                    throw new Exception("Error: CPU not available! Maybe wrong IP or MPI Address or Rack/Slot or ...");
-                }
-                if (ret != 0)
-                    throw new PLCException("Error: (Connection) (Code: " + ret.ToString() + ") " + _errorCodeConverter(ret), ret);
-
-                Connected = true;
-
-                if (Logger != null)
-                    Logger("PLC Connection created");
-
-                if (PlcConnected != null) PlcConnected(this);
-                #endregion
             }
         }
 
@@ -2233,11 +2241,10 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                             return -1;
                         else
                             return 0;
+                    else if (pt1.DataBlockNumber > pt2.DataBlockNumber)
+                        return 1;
                     else
-                        if (pt1.DataBlockNumber > pt2.DataBlockNumber)
-                            return 1;
-                        else
-                            return -1;
+                        return -1;
 
                     return 0;
                 }
@@ -2251,11 +2258,10 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                             return -1;
                         else
                             return 0;
+                    else if (pt1.TagDataSource > pt2.TagDataSource)
+                        return 1;
                     else
-                        if (pt1.TagDataSource > pt2.TagDataSource)
-                            return 1;
-                        else
-                            return -1;
+                        return -1;
 
                 }
             }
@@ -4445,6 +4451,11 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                             _fds.rfd = IntPtr.Zero;
                             break;
                     }
+            }
+            if (_tcpClient != null)
+            {
+                _tcpClient.Close();
+                _tcpClient = null;
             }
 
             _dbSizes = null;
