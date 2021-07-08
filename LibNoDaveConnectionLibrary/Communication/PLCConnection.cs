@@ -99,6 +99,12 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
 
         public bool AutoDisconnect { get; set; }
 
+        public PLCConnection()
+        {
+            _configuration = new PLCConnectionConfiguration();
+            AutoDisconnect = true;
+        }
+
         public PLCConnection(String name)
         {
             if (name == "")
@@ -182,46 +188,54 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
 
         public void socket_Thread()
         {
-            _fds.rfd = IntPtr.Zero;
-
-            if (_tcpClient != null)
-            {
-                IntPtr? ptr = _tcpClient.Client != null ? (IntPtr?)_tcpClient.Client.Handle : null;
-                if (Logger != null)
-                    Logger("socket thread - close old socket :" + (ptr.HasValue ? ptr.ToString() : ""));
-                _tcpClient.Close();
-                _tcpClient = null;
-            }
-
-            string ip = null;
             try
             {
-                IPAddress[] addresslist = Dns.GetHostAddresses(_configuration.CpuIP);
-                foreach (var ipAddress in addresslist)
+                _fds.rfd = IntPtr.Zero;
+
+                if (_tcpClient != null)
                 {
-                    if (ipAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                    IntPtr? ptr = _tcpClient.Client != null ? (IntPtr?)_tcpClient.Client.Handle : null;
+                    if (Logger != null)
+                        Logger("socket thread - close old socket :" + (ptr.HasValue ? ptr.ToString() : ""));
+                    _tcpClient.Close();
+                    _tcpClient = null;
+                }
+
+                string ip = null;
+                try
+                {
+                    IPAddress[] addresslist = Dns.GetHostAddresses(_configuration.CpuIP);
+                    foreach (var ipAddress in addresslist)
                     {
-                        ip = ipAddress.ToString();
-                        break;
+                        if (ipAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                        {
+                            ip = ipAddress.ToString();
+                            break;
+                        }
                     }
                 }
+                catch (Exception)
+                { }
+
+                if (Logger != null)
+                    Logger("socket thread try to connect");
+
+                if (ip == null)
+                    ip = _configuration.CpuIP;
+
+                _tcpClient = new TcpClient();
+                _tcpClient.Connect(IPAddress.Parse(ip), _configuration.Port);
+
+                if (Logger != null)
+                    Logger("socket thread - got socket pointer:" + _tcpClient.Client.Handle.ToString());
+
+                _fds.rfd = _tcpClient.Client.Handle;
             }
-            catch (Exception)
-            { }
-
-            if (Logger != null)
-                Logger("socket thread try to connect");
-
-            if (ip == null)
-                ip = _configuration.CpuIP;
-
-            _tcpClient = new TcpClient();
-            _tcpClient.Connect(IPAddress.Parse(ip), _configuration.Port);
-
-            if (Logger != null)
-                Logger("socket thread - got socket pointer:" + _tcpClient.Client.Handle.ToString());
-
-            _fds.rfd = _tcpClient.Client.Handle;
+            catch (Exception ex)
+            {
+                if (Logger != null)
+                    Logger("socket thread Exception:" + ex.Message);
+            }
         }
 
         #region General
@@ -3703,7 +3717,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                         var currValSize = currVal._internalGetSize();
 
                         if (gesWriteSize < maxWriteSize && //Maximale Byte Anzahl noch nicht erreicht
-                            /*anzWriteVar < maxWriteVar &&*/
+                                                           /*anzWriteVar < maxWriteVar &&*/
                             ( //maximale Variablenanzahl noch nicht erreicht                        
                                 splitPos != 0 || //Value ist schon gesplitted
                                 !currVal.DontSplitValue || //Value Kann gesplitted Werden
@@ -4446,7 +4460,8 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                         case LibNodaveConnectionTypes.Netlink_lite:
                         case LibNodaveConnectionTypes.Netlink_lite_PPI:
                         case LibNodaveConnectionTypes.Netlink_Pro:
-                            _tcpClient.Close();
+                            if (_tcpClient != null)
+                                _tcpClient.Close();
                             _tcpClient = null;
                             _fds.rfd = IntPtr.Zero;
                             break;
