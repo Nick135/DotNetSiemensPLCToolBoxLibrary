@@ -832,9 +832,9 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication.LibNoDave
 
                 else
                     if (Data == null)
-                        res = daveBuildAndSendPDU32(pointer, myPDU.pointer, Parameter, Parameter.Length, null, 0);
-                    else
-                        res = daveBuildAndSendPDU32(pointer, myPDU.pointer, Parameter, Parameter.Length, Data, Data.Length);
+                    res = daveBuildAndSendPDU32(pointer, myPDU.pointer, Parameter, Parameter.Length, null, 0);
+                else
+                    res = daveBuildAndSendPDU32(pointer, myPDU.pointer, Parameter, Parameter.Length, Data, Data.Length);
                 return res;
             }
 
@@ -2640,10 +2640,11 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication.LibNoDave
         /// <param name="length"></param>
         public static void putS7Stringat(byte[] b, int pos, string value, int length)
         {
+            byte[] data = Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.ANSICodePage).GetBytes(value);
             b[pos] = (byte)length;
-            b[pos + 1] = length > value.Length ? (byte)value.Length : (byte)length;
+            b[pos + 1] = length > data.Length ? (byte)data.Length : (byte)length;
             //Array.Copy(Encoding.ASCII.GetBytes(value), 0, b, pos + 2, value.Length > length ? length : value.Length);
-            Array.Copy(Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.ANSICodePage).GetBytes(value), 0, b, pos + 2, value.Length > length ? length : value.Length);
+            Array.Copy(data, 0, b, pos + 2, Math.Min(data.Length, length));
         }
 
         /// <summary>
@@ -2655,8 +2656,22 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication.LibNoDave
         /// <param name="length"></param>
         public static void putStringat(byte[] b, int pos, string value, int length)
         {
+            byte[] data = Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.ANSICodePage).GetBytes(value);
             //Array.Copy(Encoding.ASCII.GetBytes(value), 0, b, pos, value.Length > length ? length : value.Length);
-            Array.Copy(Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.ANSICodePage).GetBytes(value), 0, b, pos, value.Length > length ? length : value.Length);
+            Array.Copy(data, 0, b, pos, Math.Min(data.Length, length));
+        }
+
+        /// <summary>
+        /// This put's a UTF8 String as a Char-Array to the PLC/NC
+        /// </summary>
+        /// <param name="b"></param>
+        /// <param name="pos"></param>
+        /// <param name="value"></param>
+        /// <param name="length"></param>
+        public static void putUTF8Stringat(byte[] b, int pos, string value, int length)
+        {
+            byte[] data = Encoding.UTF8.GetBytes(value);
+            Array.Copy(data, 0, b, pos, Math.Min(data.Length, length));
         }
 
         public static void putFloatat(byte[] b, int pos, Single value)

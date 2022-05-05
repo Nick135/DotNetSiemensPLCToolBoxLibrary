@@ -953,10 +953,10 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                         Controlvalue = val;
                     }
                     break;
-                    /* 
-                     *  case TagDataType.TimeOfDay:    
-                        case TagDataType.Float:
-                        */
+                /* 
+                 *  case TagDataType.TimeOfDay:    
+                    case TagDataType.Float:
+                    */
             }
         }
 
@@ -1791,7 +1791,10 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                         libnodave.putS7Stringat(buff, startpos, ctlValue.ToString(), ArraySize);
                         break;
                     case TagDataType.CharArray:
-                        libnodave.putStringat(buff, startpos, ctlValue.ToString(), ArraySize);
+                        if (this is PLCNckTag)
+                            libnodave.putUTF8Stringat(buff, startpos, ctlValue.ToString(), ArraySize);
+                        else
+                            libnodave.putStringat(buff, startpos, ctlValue.ToString(), ArraySize);
                         break;
                     case TagDataType.ByteArray:
                         {
@@ -1943,7 +1946,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                                     _setValueProp = Encoding.Default.GetString(buff, startpos + 2, size);
                             }
                             else
-                                _setValueProp = Encoding.Default.GetString(buff, startpos, Math.Min(buff.Length - startpos, ArraySize)).Split('\0')[0];
+                                _setValueProp = Encoding.UTF8.GetString(buff, startpos, Math.Min(buff.Length - startpos, ArraySize)).Split('\0')[0];
                         }
                         break;
                     case TagDataType.CharArray:
@@ -1954,7 +1957,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                             //_setValueProp = sb.ToString();
 
                             if (this is PLCNckTag) //BugFix für NCK v2.6
-                                _setValueProp = Encoding.Default.GetString(buff, startpos, Math.Min(buff.Length - startpos, ArraySize)).Split('\0')[0];
+                                _setValueProp = Encoding.UTF8.GetString(buff, startpos, Math.Min(buff.Length - startpos, ArraySize)).Split('\0')[0];
                             else
                                 _setValueProp = Encoding.Default.GetString(buff, startpos, Math.Min(buff.Length - startpos, ArraySize)).Trim('\0');
                         }
