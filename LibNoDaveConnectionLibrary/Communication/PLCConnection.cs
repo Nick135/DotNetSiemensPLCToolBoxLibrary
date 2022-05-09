@@ -3886,6 +3886,8 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
         #region NC file transfer
         /// <summary>
         /// Load complete file from NC
+        /// 
+        /// initUploadNC, doUploadNC, endUploadNC
         /// </summary>
         /// <param name="fullFileName">full filename inc. path</param>
         /// <param name="F_XFER">Start PI-Service F_XFER before upload</param>
@@ -3895,49 +3897,6 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
             libnodave.resultSet rs = new libnodave.resultSet();
             byte[] id = new byte[4];
             List<byte> lRet = new List<byte>();
-            string file = fullFileName.Remove(0, fullFileName.LastIndexOf('/') > 0 ? fullFileName.LastIndexOf('/') + 1 : 0);
-
-            if (F_XFER)
-                PI_Service("_N_F_XFER", new string[] { "P01", fullFileName });
-
-            int res = _dc.initUploadNC(file, ref id);
-            if (res != 0)
-                throw new Exception("UploadFromNC: " + res);
-
-            int more = 0;
-            int len = 0;
-            byte[] buffer = new byte[1024];
-
-            do
-            {
-                res = _dc.doUploadNC(out more, buffer, out len, id);
-                if (res != 0)
-                    break;
-
-                for (int i = 0; i < len; i++)
-                {
-                    lRet.Add(buffer[i]);
-                }
-            } while (more != 0);
-
-            res = _dc.endUploadNC(id);
-            if (res != 0)
-                throw new Exception("BinaryUploadFromNC: " + res);
-
-            return lRet.ToArray();
-        }
-
-        /// <summary>
-        /// Load complete file from NC
-        /// </summary>
-        /// <param name="fullFileName">full filename inc. path</param>
-        /// <param name="F_XFER">Start PI-Service F_XFER before upload</param>
-        /// <returns></returns>
-        public string UploadFromNC(string fullFileName, bool F_XFER = true)
-        {
-            libnodave.resultSet rs = new libnodave.resultSet();
-            byte[] id = new byte[4];
-            string ret = string.Empty;
             string file = fullFileName.Remove(0, fullFileName.LastIndexOf('/') > 0 ? fullFileName.LastIndexOf('/') + 1 : 0);
 
             if (F_XFER)
@@ -3960,7 +3919,11 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                 res = _dc.doUploadNC(out more, buffer, out len, id);
                 if (res != 0)
                     break;
-                ret += System.Text.Encoding.Default.GetString(buffer, 0, len);
+
+                for (int i = 0; i < len; i++)
+                {
+                    lRet.Add(buffer[i]);
+                }
             } while (more != 0);
 
             res = _dc.endUploadNC(id);
@@ -3970,13 +3933,31 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
 #endif
 
             if (res != 0)
-                throw new Exception("UploadFromNC: " + res);
+                throw new Exception("BinaryUploadFromNC: " + res);
 
-            return ret;
+            return lRet.ToArray();
         }
 
         /// <summary>
         /// Load complete file from NC
+        /// 
+        /// initUploadNC, doUploadNC, endUploadNC
+        /// </summary>
+        /// <param name="fullFileName">full filename inc. path</param>
+        /// <param name="F_XFER">Start PI-Service F_XFER before upload</param>
+        /// <returns></returns>
+        public string UploadFromNC(string fullFileName, bool F_XFER = true)
+        {
+            byte[] data = BinaryUploadFromNC(fullFileName, F_XFER);
+            if (data.Length == 0)
+                return string.Empty;
+            return System.Text.Encoding.UTF8.GetString(data); // Encoding.Default
+        }
+
+        /// <summary>
+        /// Load complete file from NC
+        /// 
+        /// initUploadNC, doUploadNC, endUploadNC
         /// </summary>
         /// <param name="fullFileName">full filename inc. path</param>
         /// <param name="size">size of the file (buffer)</param>
@@ -3996,11 +3977,12 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
             int length = 0;
             byte[] buffer = new byte[size];
             int res = _dc.daveGetNCProgram(filename, buffer, ref length);
+            // daveGetNCProgram => initUploadNC, doUploadNC, endUploadNC
 
             if (res != 0)
                 throw new Exception("UploadFromNC: " + res);
             else
-                ret = System.Text.Encoding.Default.GetString(buffer, 0, length);
+                ret = System.Text.Encoding.UTF8.GetString(buffer, 0, length); // Encoding.Default
 
             return ret;
         }
@@ -4015,48 +3997,6 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
         public byte[] BinaryUploadNcFile(string fullFileName, int size = 0, bool F_XFER = false)
         {
             libnodave.resultSet rs = new libnodave.resultSet();
-            string filename = fullFileName.Remove(0, fullFileName.LastIndexOf('/') > 0 ? fullFileName.LastIndexOf('/') + 1 : 0);
-
-            if (size == 0) // 128 MB
-                size = 0x8000000; //UploadNcFileSize(fullFileName, F_XFER);
-            if (F_XFER)
-                PI_Service("_N_F_XFER", new string[] { "P01", fullFileName });
-
-            int length = 0;
-            byte[] buffer = new byte[size];
-            int res = _dc.daveGetNcFile(filename, buffer, ref length);
-
-            if (res != 0)
-                throw new Exception("BinaryUploadNcFile: " + res);
-
-            byte[] ret = new byte[length];
-            Array.Copy(buffer, ret, length);
-
-            return ret;
-        }
-
-        /// <summary>
-        /// Load complete file from NC
-        /// </summary>
-        /// <param name="fullFileName">full filename inc. path</param>
-        /// <param name="F_XFER">Start PI-Service F_XFER before upload</param>
-        /// <returns></returns>
-        public string UploadNcFile(string fullFileName, bool F_XFER = true)
-        {
-            return UploadNcFile(fullFileName, 0, F_XFER);
-        }
-
-        /// <summary>
-        /// Load complete file from NC
-        /// </summary>
-        /// <param name="fullFileName">full filename inc. path</param>
-        /// <param name="size">size of the file (buffer)</param>
-        /// <param name="F_XFER">Start PI-Service F_XFER before upload</param>
-        /// <returns></returns>
-        public string UploadNcFile(string fullFileName, int size = 0, bool F_XFER = true)
-        {
-            libnodave.resultSet rs = new libnodave.resultSet();
-            string ret = string.Empty;
             string filename = fullFileName.Remove(0, fullFileName.LastIndexOf('/') > 0 ? fullFileName.LastIndexOf('/') + 1 : 0);
 
             if (size == 0) // 128 MB
@@ -4089,13 +4029,40 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
 #endif
 
             if (res != 0)
-                throw new Exception("UploadNcFile: " + res);
+                throw new Exception("BinaryUploadNcFile: " + res);
             else if (length > buffer.Length)
                 throw new ArgumentOutOfRangeException("size", size, "File size: " + length);
-            else
-                ret = System.Text.Encoding.Default.GetString(buffer, 0, length);
+
+            byte[] ret = new byte[length];
+            Array.Copy(buffer, ret, length);
 
             return ret;
+        }
+
+        /// <summary>
+        /// Load complete file from NC
+        /// </summary>
+        /// <param name="fullFileName">full filename inc. path</param>
+        /// <param name="F_XFER">Start PI-Service F_XFER before upload</param>
+        /// <returns></returns>
+        public string UploadNcFile(string fullFileName, bool F_XFER = true)
+        {
+            return UploadNcFile(fullFileName, 0, F_XFER);
+        }
+
+        /// <summary>
+        /// Load complete file from NC
+        /// </summary>
+        /// <param name="fullFileName">full filename inc. path</param>
+        /// <param name="size">size of the file (buffer)</param>
+        /// <param name="F_XFER">Start PI-Service F_XFER before upload</param>
+        /// <returns></returns>
+        public string UploadNcFile(string fullFileName, int size = 0, bool F_XFER = true)
+        {
+            byte[] data = BinaryUploadNcFile(fullFileName, size, F_XFER);
+            if (data.Length == 0)
+                return string.Empty;
+            return System.Text.Encoding.UTF8.GetString(data); // Encoding.Default
         }
 
         /// <summary>
@@ -4144,7 +4111,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
             string filename = fullFileName.Remove(0, fullFileName.LastIndexOf('/') > 0 ? fullFileName.LastIndexOf('/') + 1 : 0);
             string path = fullFileName.Substring(0, fullFileName.LastIndexOf('/') > 0 ? fullFileName.LastIndexOf('/') : fullFileName.Length);
 
-            byte[] buffer = System.Text.Encoding.Default.GetBytes(data);
+            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(data); // Encoding.Default
             if (string.IsNullOrEmpty(ts))
                 ts = DateTime.Now.ToString("yyMMddHHmmss");
             int res = _dc.davePutNCProgram(filename, path, ts, buffer, buffer.Length);
