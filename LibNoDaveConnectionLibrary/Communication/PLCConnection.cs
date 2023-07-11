@@ -3908,7 +3908,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
 
             int res = _dc.initUploadNC(file, ref id);
             if (res != 0)
-                throw new Exception("UploadFromNC: " + res);
+                throw new Exception("BinaryUploadFromNC: " + res);
 
             int more = 0;
             int len = 0;
