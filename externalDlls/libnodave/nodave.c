@@ -469,7 +469,10 @@ void DECL2 _daveAddValue(PDU * p, void * data, int len) {
 	if (*dtype == 4) {	/* bit data, length is in bits */
 		dCount += 8 * len;
 	}
-	else if (*dtype == 9) {	/* byte data, length is in bytes */
+	else if (*dtype == 6 || *dtype == 7 || *dtype == 9) {	/* byte data, length is in bytes */
+		dCount += len;
+	}
+	else if (*dtype == 5) {	/* byte data, length is in bytes (SINUMERIK Drive) */
 		dCount += len;
 	}
 	else if (*dtype == 3) {	/* bit data, length is in bits */
@@ -722,7 +725,7 @@ void DECL2 daveAddNCKToReadRequest(PDU *p, int area, int unit, int column, int l
 	}
 }
 
-void DECL2 daveAddNCKToWriteRequest(PDU *p, int area, int unit, int column, int line, int module, int linecount, int byteCount, void * buffer) {
+void DECL2 daveAddNCKToWriteRequestEx(PDU *p, int transportSize, int area, int unit, int column, int line, int module, int linecount, int byteCount, void * buffer) {
 	uc saveData[1024];
 	//#ifdef ARM_FIX
 	//		us tmplen;
@@ -734,13 +737,13 @@ void DECL2 daveAddNCKToWriteRequest(PDU *p, int area, int unit, int column, int 
 	//S7COMM_DATA_TRANSPORT_SIZE_NULL	 0
 	//S7COMM_DATA_TRANSPORT_SIZE_BBIT	 3			/* bit access, len is in bits */
 	//S7COMM_DATA_TRANSPORT_SIZE_BBYTE	4			/* byte/word/dword access, len is in bits */
-	//S7COMM_DATA_TRANSPORT_SIZE_BINT	 5			/* integer access, len is in bits */
+	//S7COMM_DATA_TRANSPORT_SIZE_BINT	 5			/* integer access, len is in bits */ // SINUMERIK Drive: len is in bytes
 	//S7COMM_DATA_TRANSPORT_SIZE_BDINT	6			/* integer access, len is in bytes */
 	//S7COMM_DATA_TRANSPORT_SIZE_BREAL	7			/* real access, len is in bytes */
 	//S7COMM_DATA_TRANSPORT_SIZE_BSTR	 9			/* octet string, len is in bytes */
 	//**************************************************************************
 	uc da[] = { 0, //Return Value
-		9, //Transport-Size
+		transportSize, //Transport-Size
 		0, //Count of the following Data
 		0, //Count of the following Data
 	};
@@ -787,6 +790,10 @@ void DECL2 daveAddNCKToWriteRequest(PDU *p, int area, int unit, int column, int 
 	if (daveDebug & daveDebugPDU) {
 		_daveDumpPDU(p);
 	}
+}
+
+void DECL2 daveAddNCKToWriteRequest(PDU *p, int area, int unit, int column, int line, int module, int linecount, int byteCount, void * buffer) {
+	daveAddNCKToWriteRequestEx(p, 9, area, unit, column, line, module, linecount, byteCount, buffer);
 }
 
 int DECL2 davePIstart_nc(daveConnection *dc, const char *piservice, const char *param[], int paramCount) {

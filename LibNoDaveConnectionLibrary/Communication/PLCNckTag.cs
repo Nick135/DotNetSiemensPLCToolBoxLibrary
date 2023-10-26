@@ -222,7 +222,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                 this.Zeile = (UInt16)nckTag.NckLine;
                 this.Bausteintyp = (byte)nckTag.NckModule;
                 this.ZEILENANZAHL = (byte)nckTag.NckLinecount;
-                this.Typ = GetNckType(nckTag.TagDataType);
+                this.Typ = (byte)GetNckType(nckTag.TagDataType);
                 this.Laenge = (UInt16)nckTag._internalGetSize();
             }
         }
@@ -437,39 +437,39 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                 ret.Zeile = (UInt16)nckTag.NckLine;
                 ret.Bausteintyp = (byte)nckTag.NckModule;
                 ret.ZEILENANZAHL = (byte)nckTag.NckLinecount;
-                ret.Typ = GetNckType(nckTag.TagDataType);
+                ret.Typ = (byte)GetNckType(nckTag.TagDataType);
                 ret.Laenge = (UInt16)nckTag._internalGetSize();
             }
             return ret;
         }
 
-        public static byte GetNckType(TagDataType type)
+        public static NckDataType GetNckType(TagDataType type)
         {
             switch (type)
             {
                 case TagDataType.Bool:
-                    return 1;
+                    return NckDataType.Bool;
                 case TagDataType.Byte:
-                    return 3;
+                    return NckDataType.Byte;
                 case TagDataType.Word:
-                    return 4;
+                    return NckDataType.Word;
                 case TagDataType.Int:
-                    return 5;
+                    return NckDataType.Int;
                 case TagDataType.Dword:
-                    return 6;
+                    return NckDataType.DWord;
                 case TagDataType.Dint:
-                    return 7;
+                    return NckDataType.DInt;
                 case TagDataType.Float:
-                    return 8;
+                    return NckDataType.Real;
                 case TagDataType.DateTime:
-                    return 14;
+                    return NckDataType.DateTime;
                 case TagDataType.LReal:
-                    return 15;
+                    return NckDataType.LReal;
                 case TagDataType.LInt:
-                    return 18;
+                    return NckDataType.LInt;
                 case TagDataType.String:
                 case TagDataType.CharArray:
-                    return 19;
+                    return NckDataType.CharArray;
                 default:
                     return 0;
             }

@@ -134,6 +134,7 @@
     <Compile Include="DataTypes\Hardware\Step7V5\ProfibusNetwork.cs" />
     <Compile Include="DataTypes\Hardware\Step7V5\ProfibusNode.cs" />
     <Compile Include="DataTypes\MultiLanguangeString.cs" />
+    <Compile Include="DataTypes\NckDataType.cs" />
     <Compile Include="DataTypes\NCK_Area.cs" />
     <Compile Include="DataTypes\Network\MpiProfiBusNetworkInterface.cs" />
     <Compile Include="DataTypes\PLCBlockName.cs" />

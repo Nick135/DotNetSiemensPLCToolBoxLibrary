@@ -3706,6 +3706,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
 
                     libnodave.resultSet rs;
                     int res;
+                    //List<int> res = new List<int>();
 
                     var myPDU = _dc.prepareWriteRequest();
 
@@ -3764,7 +3765,32 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication
                                         //    transsize = 9;
 
                                         #endregion
-                                        myPDU.addNCKToWriteRequest((int)nckT.NckArea, nckT.NckUnit, nckT.NckColumn, nckT.NckLine, nckT.NckModule, nckT.NckLinecount, wrt.Length, wrt);
+#if daveDebug
+                                        libnodave.daveSetDebug(0x1ffff);
+#endif
+                                        if (nckT.NckArea == NCK_Area.AreaFeedDrive) // || nckT.NckArea == NCK_Area.AreaMainDrive) // ToDo: Prüfen ob das auch für MainDrive zutrifft
+                                        {
+                                            int transportSize = 9;
+                                            NckDataType nckType = NC_Var.GetNckType(nckT.TagDataType);
+                                            if (nckType == NckDataType.Bool)
+                                                transportSize = 3;
+                                            else if (nckType == NckDataType.Byte
+                                                || nckType == NckDataType.Word
+                                                || nckType == NckDataType.DWord)
+                                                transportSize = 6;  // Der Antrieb verwendet nicht die Transportsize 4 sondern 6. Dadurch wird die Länge in Bytes angegeben.
+                                            else if (nckType == NckDataType.Int)
+                                                transportSize = 5;
+                                            else if (nckType == NckDataType.DInt)
+                                                transportSize = 6;
+                                            else if (nckType == NckDataType.Float)
+                                                transportSize = 7;
+                                            myPDU.addNCKToWriteRequestEx(transportSize, (int)nckT.NckArea, nckT.NckUnit, nckT.NckColumn, nckT.NckLine, nckT.NckModule, nckT.NckLinecount, wrt.Length, wrt);
+                                        }
+                                        else
+                                            myPDU.addNCKToWriteRequest((int)nckT.NckArea, nckT.NckUnit, nckT.NckColumn, nckT.NckLine, nckT.NckModule, nckT.NckLinecount, wrt.Length, wrt);
+#if daveDebug
+                                        libnodave.daveSetDebug(0);
+#endif
                                     }
                                     else
                                     {

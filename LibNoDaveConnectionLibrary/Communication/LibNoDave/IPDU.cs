@@ -13,6 +13,7 @@ namespace DotNetSiemensPLCToolBoxLibrary.Communication.LibNoDave
         void addVarToWriteRequest(int area, int DBnum, int start, int bytes, byte[] buffer);
 	    void addNCKToReadRequest(int area, int unit, int column, int line, int module, int linecount);
         void addNCKToWriteRequest(int area, int unit, int column, int line, int module, int linecount, int bytes, byte[] buffer);
-		void daveAddFillByteToReadRequest();
+        void addNCKToWriteRequestEx(int transportSize, int area, int unit, int column, int line, int module, int linecount, int bytes, byte[] buffer);
+        void daveAddFillByteToReadRequest();
     }
 }

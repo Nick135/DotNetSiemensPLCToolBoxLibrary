@@ -48,6 +48,11 @@ namespace ToolBoxLibUnitTests
             Requests.Add("Write NCK");
         }
 
+        public void addNCKToWriteRequestEx(int transportSize, int area, int unit, int column, int line, int module, int linecount, int bytes, byte[] buffer)
+        {
+            Requests.Add("Write NCK ex");
+        }
+
         public void daveAddFillByteToReadRequest()
         { }
 
