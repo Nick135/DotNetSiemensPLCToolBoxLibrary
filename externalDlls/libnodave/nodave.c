@@ -7449,7 +7449,7 @@ int DECL2 davePutNCProgram(daveConnection *dc, char *filename, char *pathname, c
 			max_data_len = daveGetMaxPDULen(dc) - 10 - 12 - 6;
 			if (daveDebug & daveDebugAll)
 				LOG2("davePutNCProgram: max_data_len=%d, Neue länge für download\n", max_data_len);
-			do_down_da[6] = '/0';
+			do_down_da[6] = '\0';
 			sprintf(do_down_da + 6, "%08d%s    ;$PATH=%s\n",
 				length + strlen(pathname) + 8,
 				ts,
@@ -7508,7 +7508,10 @@ int DECL2 davePutNCProgram(daveConnection *dc, char *filename, char *pathname, c
 
 						/*			  push-nc					continue */
 						if (p2.param[5] == 0x3f && p2.param[6] == 0x03 && p2.dlen == 6) {
-							unackcount = 8; //p2.data[4];	/* Anzahl an Paketen die gesendet werden dürfen, ohne auf ein Ack zu warten */
+							/* Bisher wurde hier fest der Wert 8 eingetragen, anstelle des gemeldeten Wert der Steuerung.
+							 * Mit NCK V6.25 in Verbindung mit großen Dateien führt dies jedoch zu Fehlern, da die Steuerung teilweise nur noch 6 Pakete akzeptiert */
+							unackcount = p2.data[4];	/* Anzahl an Paketen die gesendet werden dürfen, ohne auf ein Ack zu warten */
+							LOG2("davePutNCProgram: continue response, neuer unackcount=%d\n", unackcount);
 							if (unackcount == 0) {
 								LOG2("davePutNCProgram: in continue response unackcount=%d. Exit!\n", unackcount);
 								res = daveResUnexpectedFunc;
